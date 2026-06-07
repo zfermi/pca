@@ -186,6 +186,15 @@ class MainActivity : FlutterActivity() {
                     result.success(ActivityTracker.getCurrentActivity())
                 }
 
+                "getLastBlockedEvent" -> {
+                    result.success(AppBlockerService.getLastBlockedEvent(this))
+                }
+
+                "clearLastBlockedEvent" -> {
+                    AppBlockerService.clearLastBlockedEvent(this)
+                    result.success(true)
+                }
+
                 else -> result.notImplemented()
             }
         }

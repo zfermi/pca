@@ -13,6 +13,9 @@ class AppBlockerService : AccessibilityService() {
         private const val KEY_BLOCKED_APPS = "blocked_apps"
         private const val KEY_BLOCKING_ENABLED = "blocking_enabled"
         private const val KEY_ACTIVE_CHILD_ID = "active_child_id"
+        private const val KEY_LAST_BLOCKED_APP = "last_blocked_app"
+        private const val KEY_LAST_BLOCKED_LABEL = "last_blocked_label"
+        private const val KEY_LAST_BLOCKED_TIME = "last_blocked_time"
 
         @Volatile
         var instance: AppBlockerService? = null
@@ -57,6 +60,30 @@ class AppBlockerService : AccessibilityService() {
 
         fun isBlockingEnabled(context: Context): Boolean {
             return getPrefs(context).getBoolean(KEY_BLOCKING_ENABLED, false)
+        }
+
+        fun setLastBlockedApp(context: Context, packageName: String, appLabel: String) {
+            getPrefs(context).edit()
+                .putString(KEY_LAST_BLOCKED_APP, packageName)
+                .putString(KEY_LAST_BLOCKED_LABEL, appLabel)
+                .putLong(KEY_LAST_BLOCKED_TIME, System.currentTimeMillis())
+                .apply()
+        }
+
+        fun getLastBlockedEvent(context: Context): Map<String, Any>? {
+            val prefs = getPrefs(context)
+            val pkg = prefs.getString(KEY_LAST_BLOCKED_APP, null) ?: return null
+            val label = prefs.getString(KEY_LAST_BLOCKED_LABEL, pkg) ?: pkg
+            val time = prefs.getLong(KEY_LAST_BLOCKED_TIME, 0)
+            return mapOf("packageName" to pkg, "appLabel" to label, "timestamp" to time)
+        }
+
+        fun clearLastBlockedEvent(context: Context) {
+            getPrefs(context).edit()
+                .remove(KEY_LAST_BLOCKED_APP)
+                .remove(KEY_LAST_BLOCKED_LABEL)
+                .remove(KEY_LAST_BLOCKED_TIME)
+                .apply()
         }
 
         private fun getPrefs(context: Context): SharedPreferences {
@@ -110,6 +137,7 @@ class AppBlockerService : AccessibilityService() {
                     packageName
                 }
                 AppBlockerOverlay.show(this, appLabel)
+                setLastBlockedApp(this, packageName, appLabel)
             }
         } else {
             if (lastBlockedPackage != null) {

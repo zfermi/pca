@@ -4,17 +4,35 @@ import '../models/child_profile.dart';
 import '../models/installed_app.dart';
 import '../models/usage_record.dart';
 import '../services/platform_timer_service.dart';
+import '../services/subscription_service.dart';
 import '../services/sync_service.dart';
 import '../utils/time_utils.dart';
 
 class ChildrenProvider extends ChangeNotifier {
   final DatabaseHelper _db = DatabaseHelper.instance;
   SyncService? _syncService;
+  SubscriptionService? _subscriptionService;
   List<ChildProfile> _children = [];
   bool _isLoading = false;
 
   void setSyncService(SyncService service) {
     _syncService = service;
+  }
+
+  void setSubscriptionService(SubscriptionService service) {
+    _subscriptionService = service;
+  }
+
+  /// Check if user can add another child profile
+  bool get canAddChild {
+    if (_subscriptionService == null) return true;
+    return _children.length < _subscriptionService!.childLimit;
+  }
+
+  /// Check if app blocking is available (premium only)
+  bool get canUseAppBlocking {
+    if (_subscriptionService == null) return true;
+    return _subscriptionService!.canUseFeature(PremiumFeature.appBlocking);
   }
 
   List<ChildProfile> get children => _children;

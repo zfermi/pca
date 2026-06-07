@@ -2,10 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/subscription_service.dart';
 import '../../services/sync_service.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/time_utils.dart';
 import '../auth/login_screen.dart';
+import 'notification_history_screen.dart';
+import '../subscription/subscription_screen.dart';
 import 'remote_child_detail_screen.dart';
 
 class RemoteDashboardScreen extends StatefulWidget {
@@ -30,12 +34,16 @@ class _RemoteDashboardScreenState extends State<RemoteDashboardScreen> {
 
     final sync = context.read<SyncService>();
     sync.subscribeToChanges(() => _loadData());
+
+    // Start polling for push notifications on phone side
+    context.read<NotificationService>().startPolling();
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
     context.read<SyncService>().unsubscribe();
+    context.read<NotificationService>().stopPolling();
     super.dispose();
   }
 
@@ -76,6 +84,21 @@ class _RemoteDashboardScreenState extends State<RemoteDashboardScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.workspace_premium),
+            tooltip: 'Subscription',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationHistoryScreen()),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
               setState(() => _isLoading = true);
@@ -109,6 +132,25 @@ class _RemoteDashboardScreenState extends State<RemoteDashboardScreen> {
                     ],
                   ),
                 ),
+              PopupMenuItem(
+                enabled: false,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.workspace_premium,
+                      size: 16,
+                      color: context.read<SubscriptionService>().isPremium
+                          ? Colors.amber
+                          : AppColors.textMuted,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Plan: ${context.read<SubscriptionService>().planDisplayName}',
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'sign_out',

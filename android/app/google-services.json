@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "394872341134",
+    "project_id": "fpca-5c1a5",
+    "storage_bucket": "fpca-5c1a5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:394872341134:android:5374345e41d9319fad7fdf",
+        "android_client_info": {
+          "package_name": "com.parentalcontrol.tv_parental_control"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDeffWTjgnoD9inqb5Ebznu5yiJHSAD2KA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

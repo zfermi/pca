@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../database/database_helper.dart';
 import '../models/child_profile.dart';
 import '../services/activity_monitor_service.dart';
+import '../services/notification_service.dart';
 import '../services/platform_timer_service.dart';
 
 class TimerProvider extends ChangeNotifier {
@@ -16,6 +17,7 @@ class TimerProvider extends ChangeNotifier {
   bool _timeExpired = false;
   bool _useNativeService = false;
   ActivityMonitorService? _activityMonitor;
+  NotificationService? _notificationService;
 
   int get remainingSeconds => _remainingSeconds;
   int get totalSeconds => _totalSeconds;
@@ -32,6 +34,10 @@ class TimerProvider extends ChangeNotifier {
 
   void setActivityMonitor(ActivityMonitorService monitor) {
     _activityMonitor = monitor;
+  }
+
+  void setNotificationService(NotificationService service) {
+    _notificationService = service;
   }
 
   Future<void> startTimer({
@@ -60,6 +66,8 @@ class TimerProvider extends ChangeNotifier {
       await PlatformTimerService.setBlockingEnabled(true);
       // Start activity monitoring for remote dashboard
       _activityMonitor?.startMonitoring(child.id!);
+      // Notify parent phones
+      _notificationService?.notifySessionStarted(child.name);
       // Poll the native service for state updates
       _startPolling();
     } else {
@@ -92,8 +100,12 @@ class TimerProvider extends ChangeNotifier {
     });
   }
 
+  int _blockedAppCheckCounter = 0;
+  int _lastBlockedTimestamp = 0;
+
   void _startPolling() {
     _timer?.cancel();
+    _blockedAppCheckCounter = 0;
     _timer = Timer.periodic(const Duration(seconds: 1), (_) async {
       final state = await PlatformTimerService.getTimerState();
       final wasRunning = _isRunning;
@@ -106,16 +118,44 @@ class TimerProvider extends ChangeNotifier {
         _timer?.cancel();
         _timer = null;
         _recordUsage();
+        if (_activeChildName != null) {
+          _notificationService?.notifyTimeLimitReached(_activeChildName!);
+        }
         onTimeExpired?.call();
+      }
+
+      // Check for blocked app attempts every 5 seconds
+      _blockedAppCheckCounter++;
+      if (_blockedAppCheckCounter >= 5) {
+        _blockedAppCheckCounter = 0;
+        _checkBlockedAppEvent();
       }
 
       notifyListeners();
     });
   }
 
+  Future<void> _checkBlockedAppEvent() async {
+    if (_notificationService == null || _activeChildName == null) return;
+    final event = await PlatformTimerService.getLastBlockedEvent();
+    if (event == null) return;
+    final timestamp = (event['timestamp'] as int?) ?? 0;
+    if (timestamp > _lastBlockedTimestamp) {
+      _lastBlockedTimestamp = timestamp;
+      final appLabel = event['appLabel'] as String? ?? 'Unknown';
+      _notificationService!.notifyBlockedAppAttempt(_activeChildName!, appLabel);
+      await PlatformTimerService.clearLastBlockedEvent();
+    }
+  }
+
   Future<void> stopTimer({bool record = true}) async {
     if (record && _isRunning && _activeChildId != null) {
       await _recordUsage();
+      if (_activeChildName != null) {
+        final usedSeconds = _totalSeconds - _remainingSeconds;
+        final usedMinutes = (usedSeconds / 60).ceil();
+        _notificationService?.notifySessionEnded(_activeChildName!, usedMinutes);
+      }
     }
 
     if (_useNativeService) {

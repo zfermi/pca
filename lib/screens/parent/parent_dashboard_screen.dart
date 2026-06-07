@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/child_profile.dart';
 import '../../providers/children_provider.dart';
+import '../../services/subscription_service.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/time_utils.dart';
+import '../../widgets/premium_gate.dart';
+import '../subscription/subscription_screen.dart';
 import 'add_child_screen.dart';
 import 'child_detail_screen.dart';
 import 'pin_screen.dart';
@@ -34,11 +37,32 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
           PopupMenuButton<String>(
             color: AppColors.surface,
             onSelected: (value) {
-              if (value == 'change_pin') {
+              if (value == 'subscription') {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+              } else if (value == 'change_pin') {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const PinScreen()));
               }
             },
             itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'subscription',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.workspace_premium,
+                      size: 18,
+                      color: context.read<SubscriptionService>().isPremium
+                          ? Colors.amber
+                          : AppColors.textMuted,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${context.read<SubscriptionService>().planDisplayName} Plan',
+                      style: const TextStyle(color: AppColors.textPrimary),
+                    ),
+                  ],
+                ),
+              ),
               const PopupMenuItem(
                 value: 'change_pin',
                 child: Text('Change PIN', style: TextStyle(color: AppColors.textPrimary)),
@@ -83,6 +107,11 @@ class _ParentDashboardScreenState extends State<ParentDashboardScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
+          final provider = context.read<ChildrenProvider>();
+          if (!provider.canAddChild) {
+            showUpgradePrompt(context, 'Unlimited Child Profiles');
+            return;
+          }
           await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddChildScreen()));
         },
         backgroundColor: AppColors.primary,

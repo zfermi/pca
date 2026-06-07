@@ -6,6 +6,7 @@ import '../../providers/children_provider.dart';
 import '../../providers/timer_provider.dart';
 import '../../utils/app_colors.dart';
 import '../../utils/time_utils.dart';
+import '../../widgets/premium_gate.dart';
 import 'add_child_screen.dart';
 import 'app_blocking_screen.dart';
 
@@ -233,6 +234,11 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: () async {
+                      final provider = context.read<ChildrenProvider>();
+                      if (!provider.canUseAppBlocking) {
+                        showUpgradePrompt(context, 'App Blocking');
+                        return;
+                      }
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -245,7 +251,14 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                       _loadData();
                     },
                     icon: const Icon(Icons.apps),
-                    label: const Text('Manage Blocked Apps'),
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Manage Blocked Apps'),
+                        if (!context.read<ChildrenProvider>().canUseAppBlocking)
+                          const PremiumBadge(),
+                      ],
+                    ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.primaryLight,
                       side: const BorderSide(color: AppColors.primary),

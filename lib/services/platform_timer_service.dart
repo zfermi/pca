@@ -278,4 +278,22 @@ class PlatformTimerService {
       return {};
     }
   }
+
+  static Future<Map<String, dynamic>?> getLastBlockedEvent() async {
+    if (!isAndroid) return null;
+    try {
+      final result = await _channel.invokeMethod('getLastBlockedEvent');
+      if (result == null) return null;
+      return Map<String, dynamic>.from(result);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> clearLastBlockedEvent() async {
+    if (!isAndroid) return;
+    try {
+      await _channel.invokeMethod('clearLastBlockedEvent');
+    } catch (_) {}
+  }
 }

@@ -5,12 +5,16 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'config/supabase_config.dart';
 import 'providers/children_provider.dart';
 import 'providers/timer_provider.dart';
 import 'services/auth_service.dart';
 import 'services/platform_timer_service.dart';
 import 'services/activity_monitor_service.dart';
+import 'services/notification_service.dart';
+import 'services/payment_service.dart';
+import 'services/subscription_service.dart';
 import 'services/sync_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -20,6 +24,14 @@ import 'utils/app_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  bool firebaseReady = false;
+  try {
+    await Firebase.initializeApp();
+    firebaseReady = true;
+  } catch (e) {
+    debugPrint('Firebase init failed: $e');
+  }
 
   bool supabaseReady = false;
   try {
@@ -38,12 +50,32 @@ void main() async {
   }
 
   final syncService = SyncService(enabled: supabaseReady);
+  final notificationService = NotificationService(
+    enabled: supabaseReady && firebaseReady,
+  );
+
   if (supabaseReady && authService.familyId != null && authService.deviceId != null) {
     syncService.configure(
       familyId: authService.familyId!,
       deviceId: authService.deviceId!,
     );
+    notificationService.configure(
+      familyId: authService.familyId!,
+      deviceId: authService.deviceId!,
+    );
   }
+
+  if (firebaseReady && supabaseReady) {
+    await notificationService.initialize();
+  }
+
+  final subscriptionService = SubscriptionService(enabled: supabaseReady);
+  if (supabaseReady && authService.familyId != null) {
+    subscriptionService.configure(familyId: authService.familyId!);
+    await subscriptionService.initialize();
+  }
+
+  final paymentService = PaymentService(enabled: supabaseReady);
 
   final activityMonitor = ActivityMonitorService();
   activityMonitor.configure(syncService);
@@ -52,6 +84,9 @@ void main() async {
     authService: authService,
     syncService: syncService,
     activityMonitor: activityMonitor,
+    notificationService: notificationService,
+    subscriptionService: subscriptionService,
+    paymentService: paymentService,
   ));
 }
 
@@ -59,12 +94,18 @@ class TVPCAApp extends StatelessWidget {
   final AuthService authService;
   final SyncService syncService;
   final ActivityMonitorService activityMonitor;
+  final NotificationService notificationService;
+  final SubscriptionService subscriptionService;
+  final PaymentService paymentService;
 
   const TVPCAApp({
     super.key,
     required this.authService,
     required this.syncService,
     required this.activityMonitor,
+    required this.notificationService,
+    required this.subscriptionService,
+    required this.paymentService,
   });
 
   @override
@@ -76,6 +117,9 @@ class TVPCAApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: authService),
         ChangeNotifierProvider.value(value: syncService),
         ChangeNotifierProvider.value(value: activityMonitor),
+        ChangeNotifierProvider.value(value: notificationService),
+        ChangeNotifierProvider.value(value: subscriptionService),
+        Provider.value(value: paymentService),
       ],
       child: MaterialApp(
         title: 'TV Parental Control',
@@ -204,8 +248,14 @@ class _AppEntryState extends State<_AppEntry> {
     if (mounted) {
       final sync = context.read<SyncService>();
       context.read<ChildrenProvider>().setSyncService(sync);
+      context.read<ChildrenProvider>().setSubscriptionService(
+        context.read<SubscriptionService>(),
+      );
       context.read<TimerProvider>().setActivityMonitor(
         context.read<ActivityMonitorService>(),
+      );
+      context.read<TimerProvider>().setNotificationService(
+        context.read<NotificationService>(),
       );
 
       // On TV, do a background sync if configured

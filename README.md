@@ -17,8 +17,17 @@ A Flutter-based parental control app for Android TV with a companion phone dashb
 - **Cloud Sync** — All settings, usage, and activity synced via Supabase
 - **Live Activity Feed** — "Now Watching" status with app name and media title
 - **Usage History** — Daily usage stats, session counts, and trend tracking
+- **Push Notifications** — Real-time alerts for session start/end, time limits, blocked app attempts
+- **Notification History** — Browse all past alerts in a dedicated screen
 - **Device Status** — See which TVs are online/offline
 - **Family Linking** — Connect TV and phone with a family code (XXXX-XXXX)
+- **Subscription Management** — Upgrade to Premium via PayPal or M-Pesa
+
+### Freemium Model
+- **Free Tier** — 1 child profile, basic timer, schedule control
+- **Premium** — Unlimited children, app blocking, remote monitoring, push notifications
+- **Pricing** — $3.99/month or $29.99/year (KSH 300/mo or KSH 2,500/yr for Kenya)
+- **Payments** — PayPal and M-Pesa (Safaricom STK push)
 
 ## Architecture
 
@@ -32,6 +41,7 @@ Single APK
 └── Phone Device → Login → Remote Dashboard
     ├── Live activity view per child
     ├── Usage stats and history
+    ├── Push notification alerts (FCM)
     └── Blocked apps and schedule overview
 ```
 
@@ -43,6 +53,7 @@ Single APK
 | State Management | Provider + ChangeNotifier |
 | Local Database | SQLite (sqflite) |
 | Cloud Backend | Supabase (Auth, PostgreSQL, Realtime) |
+| Push Notifications | Firebase Cloud Messaging (FCM) |
 | Native Services | Kotlin (AccessibilityService, WindowManager, MediaSessionManager) |
 | Platform Bridge | MethodChannel |
 
@@ -64,6 +75,8 @@ lib/
 │   ├── auth_service.dart              # Supabase auth + family management
 │   ├── sync_service.dart              # Cloud sync + realtime subscriptions
 │   ├── activity_monitor_service.dart  # TV activity tracking → Supabase
+│   ├── notification_service.dart      # FCM push notifications
+│   ├── subscription_service.dart      # Freemium gating + payment management
 │   └── platform_timer_service.dart    # Native platform channel bridge
 ├── utils/           # Colors, time formatting, PIN manager
 └── main.dart        # Entry point, mode detection, provider setup
@@ -97,7 +110,13 @@ flutter pub get
 2. Run the schema in `supabase_schema.sql` in the SQL Editor
 3. Update `lib/config/supabase_config.dart` with your project URL and anon key
 
-### 3. Build and install
+### 3. Firebase setup (for push notifications)
+1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
+2. Add an Android app with package name `com.parentalcontrol.tv_parental_control`
+3. Download `google-services.json` and place it in `android/app/`
+4. Run `supabase_fcm_schema.sql` in the Supabase SQL Editor to create notification tables
+
+### 4. Build and install
 ```bash
 # Debug build
 flutter build apk --debug
@@ -120,17 +139,17 @@ adb install -r build/app/outputs/flutter-apk/app-debug.apk
 
 ## Supabase Schema
 
-Tables: `families`, `devices`, `children`, `usage_records`, `blocked_apps`, `activity_logs`
+Tables: `families`, `devices`, `children`, `usage_records`, `blocked_apps`, `activity_logs`, `fcm_tokens`, `notification_queue`, `subscriptions`
 
-All tables use Row Level Security (RLS) scoped to family membership. Realtime is enabled on `children`, `usage_records`, `activity_logs`, and `blocked_apps`.
+All tables use Row Level Security (RLS) scoped to family membership. Realtime is enabled on `children`, `usage_records`, `activity_logs`, `blocked_apps`, and `notification_queue`.
 
 ## Roadmap
 
 - [x] Phase 1: Per-app blocking (AccessibilityService + overlay)
 - [x] Phase 2: Supabase integration (auth, sync, remote dashboard)
 - [x] Phase 3: Remote monitoring (activity tracking + live parent view)
-- [ ] Phase 4: FCM push notifications (alerts on phone)
-- [ ] Phase 5: Freemium gating (free tier vs premium)
+- [x] Phase 4: FCM push notifications (alerts on phone)
+- [x] Phase 5: Freemium gating (PayPal + M-Pesa payments)
 
 ## License
 
