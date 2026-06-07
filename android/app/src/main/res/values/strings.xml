@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">TV Parental Control uses this service to detect which apps are running and block apps that parents have restricted for their children.</string>
+</resources>
