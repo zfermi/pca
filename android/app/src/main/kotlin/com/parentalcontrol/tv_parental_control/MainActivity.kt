@@ -1,6 +1,8 @@
 package com.parentalcontrol.tv_parental_control
 
+import android.app.admin.DevicePolicyManager
 import android.app.UiModeManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -13,6 +15,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.os.UserManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -88,6 +91,27 @@ class MainActivity : FlutterActivity() {
 
                 "isTvDevice" -> {
                     result.success(isTvDevice())
+                }
+
+                "getDeviceProtectionState" -> {
+                    result.success(getDeviceProtectionState())
+                }
+
+                "requestDeviceAdmin" -> {
+                    result.success(requestDeviceAdmin())
+                }
+
+                "setDeviceProtectionEnabled" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    result.success(setDeviceProtectionEnabled(enabled))
+                }
+
+                "startKioskMode" -> {
+                    result.success(startKioskMode())
+                }
+
+                "stopKioskMode" -> {
+                    result.success(stopKioskMode())
                 }
 
                 "requestOverlayPermission" -> {
@@ -257,6 +281,153 @@ class MainActivity : FlutterActivity() {
         val hasLeanback = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
         val hasTelevision = packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
         return isTelevisionMode || hasLeanback || hasTelevision
+    }
+
+    private fun adminComponent(): ComponentName {
+        return ComponentName(this, TvpcaDeviceAdminReceiver::class.java)
+    }
+
+    private fun devicePolicyManager(): DevicePolicyManager {
+        return getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    }
+
+    private fun getDeviceProtectionState(): Map<String, Any?> {
+        val dpm = devicePolicyManager()
+        val admin = adminComponent()
+        val isAdminActive = dpm.isAdminActive(admin)
+        val isDeviceOwner = dpm.isDeviceOwnerApp(packageName)
+        val supportsDeviceAdmin = packageManager.hasSystemFeature(PackageManager.FEATURE_DEVICE_ADMIN)
+        val uninstallBlocked = try {
+            dpm.isUninstallBlocked(null, packageName)
+        } catch (_: Exception) {
+            false
+        }
+        val lockTaskPermitted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            dpm.isLockTaskPermitted(packageName)
+        } else {
+            false
+        }
+        val appsControlRestricted = try {
+            dpm.getUserRestrictions(admin)
+                .getBoolean(UserManager.DISALLOW_APPS_CONTROL, false)
+        } catch (_: Exception) {
+            false
+        }
+
+        return mapOf(
+            "isAdminActive" to isAdminActive,
+            "isDeviceOwner" to isDeviceOwner,
+            "supportsDeviceAdmin" to supportsDeviceAdmin,
+            "uninstallBlocked" to uninstallBlocked,
+            "lockTaskPermitted" to lockTaskPermitted,
+            "appsControlRestricted" to appsControlRestricted,
+            "packageName" to packageName,
+            "adminReceiver" to "$packageName/.TvpcaDeviceAdminReceiver",
+            "provisioningCommand" to "adb shell dpm set-device-owner $packageName/.TvpcaDeviceAdminReceiver"
+        )
+    }
+
+    private fun requestDeviceAdmin(): Map<String, Any?> {
+        return try {
+            val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent())
+                putExtra(
+                    DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                    "Activate protection so TV Parental Control is harder to remove."
+                )
+            }
+            startActivity(intent)
+            getDeviceProtectionState() + mapOf(
+                "success" to true,
+                "message" to "Device admin setup opened."
+            )
+        } catch (e: Exception) {
+            getDeviceProtectionState() + mapOf(
+                "success" to false,
+                "message" to (e.message ?: "Unable to open device admin setup.")
+            )
+        }
+    }
+
+    private fun setDeviceProtectionEnabled(enabled: Boolean): Map<String, Any?> {
+        val dpm = devicePolicyManager()
+        val admin = adminComponent()
+
+        if (!dpm.isDeviceOwnerApp(packageName)) {
+            return getDeviceProtectionState() + mapOf(
+                "success" to false,
+                "message" to "TV Parental Control is not the Device Owner."
+            )
+        }
+
+        return try {
+            dpm.setUninstallBlocked(admin, packageName, enabled)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                dpm.setLockTaskPackages(
+                    admin,
+                    if (enabled) arrayOf(packageName) else emptyArray()
+                )
+            }
+            if (enabled) {
+                dpm.addUserRestriction(admin, UserManager.DISALLOW_APPS_CONTROL)
+                dpm.addUserRestriction(admin, UserManager.DISALLOW_SAFE_BOOT)
+            } else {
+                dpm.clearUserRestriction(admin, UserManager.DISALLOW_APPS_CONTROL)
+                dpm.clearUserRestriction(admin, UserManager.DISALLOW_SAFE_BOOT)
+            }
+
+            getDeviceProtectionState() + mapOf(
+                "success" to true,
+                "message" to if (enabled) {
+                    "Device protection enabled."
+                } else {
+                    "Device protection disabled."
+                }
+            )
+        } catch (e: Exception) {
+            getDeviceProtectionState() + mapOf(
+                "success" to false,
+                "message" to (e.message ?: "Unable to update device protection.")
+            )
+        }
+    }
+
+    private fun startKioskMode(): Map<String, Any?> {
+        val dpm = devicePolicyManager()
+        if (!dpm.isLockTaskPermitted(packageName)) {
+            return getDeviceProtectionState() + mapOf(
+                "success" to false,
+                "message" to "Kiosk mode is not allowlisted for this app."
+            )
+        }
+
+        return try {
+            startLockTask()
+            getDeviceProtectionState() + mapOf(
+                "success" to true,
+                "message" to "Kiosk mode started."
+            )
+        } catch (e: Exception) {
+            getDeviceProtectionState() + mapOf(
+                "success" to false,
+                "message" to (e.message ?: "Unable to start kiosk mode.")
+            )
+        }
+    }
+
+    private fun stopKioskMode(): Map<String, Any?> {
+        return try {
+            stopLockTask()
+            getDeviceProtectionState() + mapOf(
+                "success" to true,
+                "message" to "Kiosk mode stopped."
+            )
+        } catch (e: Exception) {
+            getDeviceProtectionState() + mapOf(
+                "success" to false,
+                "message" to (e.message ?: "Unable to stop kiosk mode.")
+            )
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

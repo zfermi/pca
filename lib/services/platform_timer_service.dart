@@ -92,6 +92,82 @@ class PlatformTimerService {
     }
   }
 
+  static Future<Map<String, dynamic>> getDeviceProtectionState() async {
+    if (!isAndroid) {
+      return {
+        'isAdminActive': false,
+        'isDeviceOwner': false,
+        'supportsDeviceAdmin': false,
+        'uninstallBlocked': false,
+        'lockTaskPermitted': false,
+        'appsControlRestricted': false,
+        'packageName': '',
+        'adminReceiver': '',
+        'provisioningCommand': '',
+      };
+    }
+    try {
+      final result = await _channel.invokeMethod('getDeviceProtectionState');
+      return Map<String, dynamic>.from(result);
+    } catch (_) {
+      return {
+        'isAdminActive': false,
+        'isDeviceOwner': false,
+        'supportsDeviceAdmin': false,
+        'uninstallBlocked': false,
+        'lockTaskPermitted': false,
+        'appsControlRestricted': false,
+        'packageName': '',
+        'adminReceiver': '',
+        'provisioningCommand': '',
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> requestDeviceAdmin() async {
+    if (!isAndroid) return {'success': false};
+    try {
+      final result = await _channel.invokeMethod('requestDeviceAdmin');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> setDeviceProtectionEnabled(
+    bool enabled,
+  ) async {
+    if (!isAndroid) return {'success': false};
+    try {
+      final result = await _channel.invokeMethod('setDeviceProtectionEnabled', {
+        'enabled': enabled,
+      });
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> startKioskMode() async {
+    if (!isAndroid) return {'success': false};
+    try {
+      final result = await _channel.invokeMethod('startKioskMode');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  static Future<Map<String, dynamic>> stopKioskMode() async {
+    if (!isAndroid) return {'success': false};
+    try {
+      final result = await _channel.invokeMethod('stopKioskMode');
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   static Future<bool> requestOverlayPermission() async {
     if (!isAndroid) return false;
     try {
@@ -241,7 +317,9 @@ class PlatformTimerService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getActivityHistory({int limit = 20}) async {
+  static Future<List<Map<String, dynamic>>> getActivityHistory({
+    int limit = 20,
+  }) async {
     if (!isAndroid) return [];
     try {
       final result = await _channel.invokeMethod('getActivityHistory', {
@@ -255,7 +333,9 @@ class PlatformTimerService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getNewActivities(int sinceTimestamp) async {
+  static Future<List<Map<String, dynamic>>> getNewActivities(
+    int sinceTimestamp,
+  ) async {
     if (!isAndroid) return [];
     try {
       final result = await _channel.invokeMethod('getNewActivities', {
